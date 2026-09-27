@@ -25,6 +25,8 @@ pub const Translate = struct {
   tkn_cache: TokenCache = .{ .tkn = 0, .has_trailing_comment = false },
   /// whether to translate an empty block `{}` as decoupled, i.e. on separate lines
   decouple_empty_block_braces: u16 = 0,
+  expand_structs: bool = false,
+  expand_parameters: bool = false,
   fmt_disabled_pos: ?usize = null,
   /// other metadata trackers
   _in_condition: bool = false,
@@ -1316,6 +1318,8 @@ pub const Translate = struct {
     if (args_have_comment) {
       // force a break since left bracket is already broken,
       sb.declline().append(r_doc);
+    } else if (self.expand_parameters and fn_tkn != null) {
+      sb.declline().append(r_doc);
     } else {
       sb.softlineIf(should_softline).append(r_doc);
     }
@@ -1485,6 +1489,8 @@ pub const Translate = struct {
       sb_prms.declline().append(doc);
     } else if (lb_has_trailing) {
       sb_prms.declline()._();
+    } else if (self.expand_parameters) {
+      sb_prms.declline()._();
     } else {
       softline_pos = sb_prms.len();
       sb_prms.softline()._();
@@ -1504,6 +1510,8 @@ pub const Translate = struct {
             } else if (self.tknHasTC(tkn)) {
               sb_prms.declline()._();
               prm_has_comment = true;
+            } else if (self.expand_parameters) {
+              sb_prms.declline()._();
             } else {
               sb_prms.normline()._();
             }
@@ -1932,6 +1940,7 @@ pub const Translate = struct {
       return self.db.groupi(id, sb.finish());
     } else if (
       comments == self._comments
+        and !self.expand_structs
         and self.canFormatMembersInline(lbrace, rbrace, members)
     ) {
       self.tContainerDeclInline(id, tmp, members);

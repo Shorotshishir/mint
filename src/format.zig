@@ -116,7 +116,8 @@ pub const Format = struct {
               if (sm.mode == .split or stack.items.len == 0) {
                 return true;
               }
-              width = @intCast(self.cfg.width - @as(u32, @intCast(sm.indent)));
+              width = @as(i32, @intCast(self.cfg.width))
+                - @as(i32, @intCast(sm.indent));
             },
             .decl, .soft => {
               // soft/decl is "" in flat mode (len = 0)

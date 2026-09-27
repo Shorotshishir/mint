@@ -8,7 +8,7 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 const log = std.log.scoped(util.getLoggerEnum(.glue));
 
 pub const FileType = std.zig.Ast.Mode;
-pub const Mode = enum { imm, watch, help, init };
+pub const Mode = enum { imm, stdin, watch, help, init };
 pub const Path = struct { path: []const u8, ty: FileType, is_config: bool = false };
 // NOTE: keep `FileTypes` in sync with `ExtensionFilters`
 pub const FileTypes = [_]FileType{ .zig, .zon };
@@ -19,10 +19,18 @@ pub const FmtConfig = fmt.FmtConfig;
 pub const MintConfig = struct {
   width: u32,
   indent: u8,
+  expand_structs: bool = false,
+  expand_parameters: bool = false,
   ignore: [][]const u8,
 
   pub fn toFmtConfig(self: MintConfig) FmtConfig {
-    return .{ .width = self.width, .indent = self.indent, .write_mode = .file };
+    return .{
+      .width = self.width,
+      .indent = self.indent,
+      .expand_structs = self.expand_structs,
+      .expand_parameters = self.expand_parameters,
+      .write_mode = .file,
+    };
   }
 };
 
@@ -158,10 +166,10 @@ pub const Glue = struct {
     // have to do it intrusively. This can easily break if we add
     // new fields to `t` or `f` or both. For now, simply creating
     // a fresh translator and formatter objects would suffice.
-    return .{
-      try ts.Translate.init(al, self.io, &self.error_set),
-      fmt.Format.init(self.io, al, cfg),
-    };
+    var translator = try ts.Translate.init(al, self.io, &self.error_set);
+    translator.expand_structs = cfg.expand_structs;
+    translator.expand_parameters = cfg.expand_parameters;
+    return .{ translator, fmt.Format.init(self.io, al, cfg) };
   }
 
   fn writeFile(self: *Glue, filename: []const u8, content: []const u8) !void {

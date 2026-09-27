@@ -16,10 +16,58 @@ fn translate(src: [:0]const u8, al: Allocator) !*fmt.Doc {
   return t.translate("test.zig", src, .zig);
 }
 
+fn translateWithConfig(
+  src: [:0]const u8,
+  cfg: fmt.FmtConfig,
+  al: Allocator,
+) !*fmt.Doc {
+  var error_set = ts.Translate.ErrorSet.init(al);
+  var t = try ts.Translate.init(al, std.testing.io, &error_set);
+  t.expand_structs = cfg.expand_structs;
+  t.expand_parameters = cfg.expand_parameters;
+  return t.translate("test.zig", src, .zig);
+}
+
 fn format(doc: *fmt.Doc, cfg: fmt.FmtConfig, al: Allocator) ![]const u8 {
   var f = fmt.Format.init(std.testing.io, al, cfg);
   f.fmt(doc);
   return f.getFmtString(true);
+}
+
+test "expand structs" {
+  var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  defer arena.deinit();
+  const al = arena.allocator();
+  const doc = try translateWithConfig(
+    "const Ty = struct { x: u8, y: u8 };",
+    .{ .width = 100, .expand_structs = true },
+    al,
+  );
+  try check(
+    try format(doc, .{ .width = 100 }, al),
+    \\const Ty = struct {
+    \\  x: u8,
+    \\  y: u8,
+    \\};
+  );
+}
+
+test "expand function parameters" {
+  var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  defer arena.deinit();
+  const al = arena.allocator();
+  const doc = try translateWithConfig(
+    "fn foo(a: u8, b: u8) void {}",
+    .{ .width = 100, .expand_parameters = true },
+    al,
+  );
+  try check(
+    try format(doc, .{ .width = 100 }, al),
+    \\fn foo(
+    \\  a: u8,
+    \\  b: u8
+    \\) void {}
+  );
 }
 
 test "vardecl 1" {

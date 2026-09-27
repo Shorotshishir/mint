@@ -212,6 +212,19 @@ pub const Cli = struct {
     );
   }
 
+  fn formatStdin(self: *Cli, cfg: fmt.FmtConfig) !void {
+    var buf: [4096]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(self.io, &buf);
+    const input = try reader.interface.allocRemaining(self.al, .unlimited);
+    const src = try self.al.dupeZ(u8, input);
+    var g = try Glue.init(self.io, self.al);
+    var fmt_cfg = cfg;
+    fmt_cfg.write_mode = .out;
+    var t, var f = g.getFormatter(self.al, fmt_cfg);
+    const doc = try t.translate("<stdin>", src, .zig);
+    f.fmt(doc);
+  }
+
   fn doInit(self: *Cli) !void {
     const template =
     \\.{ .width = 85, .indent = 2, .ignore = .{} }
@@ -226,6 +239,14 @@ pub const Cli = struct {
     switch (self.mode) {
       .help => return,
       .init => return self.doInit(),
+      .stdin => {
+        self.discoverConfigs() catch return;
+        for (self.projects.values()) |*proj| {
+          proj.loadConfig(self.io, true, self.al) catch return;
+          return self.formatStdin(proj.getFmtConfig());
+        }
+        return self.formatStdin(.{});
+      },
       else => {
         self.discoverConfigs() catch return;
         if (self.mode == .watch) {
@@ -261,7 +282,12 @@ pub const ArgParse = struct {
     } else {
       const m_cmd = args[0];
       if (std.mem.eql(u8, "fmt", m_cmd)) {
-        return Cli.init(al, io, if (args.len > 1) args[1..] else null, .imm);
+        return Cli.init(
+          al,
+          io,
+          if (args.len > 1) args[1..] else null,
+          if (args.len > 1) .imm else .stdin,
+        );
       } else if (std.mem.eql(u8, "watch", m_cmd)) {
         return Cli.init(al, io, if (args.len > 1) args[1..] else null, .watch);
       } else if (std.mem.eql(u8, "init", m_cmd)) {
